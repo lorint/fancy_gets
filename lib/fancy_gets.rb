@@ -40,7 +40,7 @@ module FancyGets
 
     write_sugg = lambda do
       # Find first word that case-insensitive matches what they've typed
-      if string.blank?
+      if string.empty?
         sugg = ""
       else
         sugg = words.select { |word| uncolor.call(word).downcase.start_with? string.downcase }.first || ""
