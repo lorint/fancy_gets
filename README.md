@@ -3,7 +3,7 @@
 This gem exists to banish crusty UX that our users endure at the command line.
 
 For far too long we've been stuck with just gets and getc.  When prompting the
-user with a list of choices, wouldn't it be nice to have the feel of a <select>
+user with a list of choices, wouldn't it be nice to have the feel of a < select >
 in HTML?  Or to auto-suggest options as they type?  Or perhaps offer a password
 entry with asterisks instead of just sitting silent, which confuses many users?
 
