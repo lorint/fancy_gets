@@ -63,7 +63,7 @@ Another cool thing this allows is to change the color of selected items.  You ma
 to check out Michał Kalbarczyk's [colorize gem](https://github.com/fazibear/colorize "Michał loves all things \033") for more info.
 
 ```ruby
-another_toy = gets_list(toys, false, nil, "==>", "<== PARTY TIME!", "Use arrows to pick something awesome.")
+another_toy = gets_list(toys, false, nil, "\033[1;31m", "\033[0m <==", "Use arrows to pick something awesome.")
 puts "\nSo much to love about #{another_toy}."
 ```
 
