@@ -115,8 +115,8 @@ module FancyGets
       puts "#{" " * uncolor.call(prefix).length}#{"↓" * max_word_length}" if height < words.length
 
       info ||= "Use arrow keys#{is_multiple ? ", spacebar to toggle, and ENTER to save" : " and ENTER to make a choice"}"
-      # %%% used to be (words.length - position)
-      print info + (27.chr + 91.chr + 65.chr) * (height - (position - (offset || 0)) - (last_word <= words.length ? 1 : 0))
+      # %%% used to be (words.length - position), and then (last_word <= words.length)
+      print info + (27.chr + 91.chr + 65.chr) * (height - (position - (offset || 0)) - (height < words.length ? 1 : 0))
       # To end of text on starting line
       info_length = uncolor.call(info).length
       word_length = uncolor.call(words[position]).length + pre_post_length
