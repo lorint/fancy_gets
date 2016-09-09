@@ -1,4 +1,4 @@
-# require "fancy_gets/version"
+require "fancy_gets/version"
 require 'io/console'
 
 module FancyGets
@@ -43,7 +43,7 @@ module FancyGets
     # gsub causes any color changes to not offset spacing
     uncolor = lambda { |word| word.gsub(/\033\[[0-9;]+m/, "") }
 
-    word_blanking_spaces = words.map{|word| uncolor.call(word).length}.max
+    max_word_length = words.map{|word| uncolor.call(word).length}.max
 
     write_sugg = lambda do
       # Find first word that case-insensitive matches what they've typed
@@ -74,6 +74,8 @@ module FancyGets
       else
         print "#{" " * uncolor.call(prefix).length}#{word}#{" " * uncolor.call(postfix).length}"
       end
+      print " " * (max_word_length - uncolor.call(words[position]).length)
+      print "\b" * (max_word_length - uncolor.call(words[position]).length)
       print "\b" * (uncolor.call(word).length + pre_post_length) if is_end_at_front
     end
 
@@ -99,19 +101,22 @@ module FancyGets
         offset = 0 if offset < 0
       end
       # Scrolled any amount downwards?
-      puts "#{" " * uncolor.call(prefix).length}A" if (offset || 0) > 0
-      top_bottom_reserved = ((offset || 0) > 1 ? 2 : 1)
+      #   was: if (offset || 0) > 0
+      puts "#{" " * uncolor.call(prefix).length}#{"↑" * max_word_length}" if height < words.length
+      #   was: ((offset || 0) > 1 ? 2 : 1)
+      top_bottom_reserved = offset.nil? ? 0 : 2
       last_word = (offset || 0) + height - top_bottom_reserved
       # Maybe we can fit it all
       last_word = words.length if last_word > words.length
       # Write all the visible words
       words[(offset || 0)...last_word].each { |word| puts chosen.include?(word) ? "#{prefix}#{word}#{postfix}" : "#{" " * uncolor.call(prefix).length}#{word}" }
       # Can't fit it all?
-      puts "#{" " * uncolor.call(prefix).length}V" if last_word < words.length
+      #   was: if last_word < (words.length - top_bottom_reserved)
+      puts "#{" " * uncolor.call(prefix).length}#{"↓" * max_word_length}" if height < words.length
 
       info ||= "Use arrow keys#{is_multiple ? ", spacebar to toggle, and ENTER to save" : " and ENTER to make a choice"}"
       # %%% used to be (words.length - position)
-      print info + (27.chr + 91.chr + 65.chr) * (height - (position - offset) - (last_word < words.length ? 1 : 0))
+      print info + (27.chr + 91.chr + 65.chr) * (height - (position - (offset || 0)) - (last_word <= words.length ? 1 : 0))
       # To end of text on starting line
       info_length = uncolor.call(info).length
       word_length = uncolor.call(words[position]).length + pre_post_length
@@ -173,48 +178,54 @@ module FancyGets
             end
           when 66 # - down
             if is_list && position < words.length - 1
+              is_shift = false
               # Now moving down past the bottom of the shown window?
-              if position >= offset + (height - 3)
+              if !offset.nil? && position >= offset + (height - 3)
                 print "\b" * (uncolor.call(words[position]).length + pre_post_length)
                 print (27.chr + 91.chr + 65.chr) * (height - (offset > 0 ? 3 : 3))
                 offset += 1
                 # Add 1 if offset + height == (words.length - 1)
                 words[offset...(offset + height - 4)].each do |word|
-                  puts (is_multiple && chosen.include?(word)) ? "#{prefix}#{word}#{postfix}" : "#{" " * uncolor.call(prefix).length}#{word}#{" " * (word_blanking_spaces - word.length)}"
+                  end_fill = max_word_length - uncolor.call(word).length
+                  puts (is_multiple && chosen.include?(word)) ? "#{prefix}#{word}#{postfix}#{" " * end_fill}" : "#{" " * uncolor.call(prefix).length}#{word}#{" " * (end_fill + uncolor.call(postfix).length)}"
                 end
+                is_shift = true
               end
-              make_select.call(false, true, true) unless is_multiple
+              make_select.call(chosen.include?(words[position]) && is_shift && is_multiple, true, true) if is_shift || !is_multiple
               w1 = uncolor.call(words[position]).length
               position += 1
               print 27.chr + 91.chr + 66.chr
-              if is_multiple
+              if is_shift || !is_multiple
+                make_select.call((chosen.include?(words[position]) && is_shift) || !is_multiple)
+              else
                 w2 = uncolor.call(words[position]).length
                 print (w1 > w2 ? "\b" : (27.chr + 91.chr + 67.chr)) * (w1 - w2).abs
-              else
-                make_select.call(true)
               end
             end
           when 65 # - up
             if is_list && position > 0
+              is_shift = false
               # Now moving up past the top of the shown window?
-              if position <= offset
+              if position <= (offset || 0)
                 print "\b" * (uncolor.call(words[position]).length + pre_post_length)
                 offset -= 1
                 # print (27.chr + 91.chr + 65.chr) if offset == 0
                 words[offset...(offset + height - 2)].each do |word|
-                  puts (is_multiple && chosen.include?(word)) ? "#{prefix}#{word}#{postfix}" : "#{" " * uncolor.call(prefix).length}#{word}#{" " * (word_blanking_spaces - word.length)}"
+                  end_fill = max_word_length - uncolor.call(word).length
+                  puts (is_multiple && chosen.include?(word)) ? "#{prefix}#{word}#{postfix}#{" " * end_fill}" : "#{" " * uncolor.call(prefix).length}#{word}#{" " * (end_fill + uncolor.call(postfix).length)}"
                 end
                 print (27.chr + 91.chr + 65.chr) * (height - (offset > 0 ? 3 : 3))
+                is_shift = true
               end
-              make_select.call(false, true, true) unless is_multiple
+              make_select.call(chosen.include?(words[position]) && is_shift && is_multiple, true, true) if is_shift || !is_multiple
               w1 = uncolor.call(words[position]).length
               position -= 1
               print 27.chr + 91.chr + 65.chr
-              if is_multiple
+              if is_shift || !is_multiple
+                make_select.call((chosen.include?(words[position]) && is_shift) || !is_multiple)
+              else
                 w2 = uncolor.call(words[position]).length
                 print (w1 > w2 ? "\b" : (27.chr + 91.chr + 67.chr)) * (w1 - w2).abs
-              else
-                make_select.call(true)
               end
             end
           when 51 # - Delete forwards?
