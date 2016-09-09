@@ -1,4 +1,4 @@
-require "fancy_gets/version"
+# require "fancy_gets/version"
 require 'io/console'
 
 module FancyGets
@@ -22,21 +22,28 @@ module FancyGets
       is_multiple = false
     end
     is_multiple = true if chosen.is_a?(Array) && chosen.length > 1
-    FancyGets.gets_internal_core(true, is_multiple, words, chosen, prefix, postfix, info)
+    height = words.length
+    winheight = IO.console.winsize.first - 3
+    height = winheight if height > winheight
+    FancyGets.gets_internal_core(true, is_multiple, words, chosen, prefix, postfix, info, height)
   end
 
   # The internal routine that makes all the magic happen
-  def self.gets_internal_core(is_list, is_password, words = nil, chosen = [], prefix = "> ", postfix = " <", info = nil)
+  def self.gets_internal_core(is_list, is_password, words = nil, chosen = [], prefix = "> ", postfix = " <", info = nil, height = nil)
     # OK -- second parameter, is_password, means is_multiple when is_list is true
     is_multiple = is_list & is_password
     words.sort! unless words.nil? || is_list
     string = chosen if chosen.is_a?(String)
     position = 0
+    height ||= words.length
+    offset = (height < words.length) ? 0 : nil
     sugg = ""
     prev_sugg = ""
 
     # gsub causes any color changes to not offset spacing
     uncolor = lambda { |word| word.gsub(/\033\[[0-9;]+m/, "") }
+
+    word_blanking_spaces = words.map{|word| uncolor.call(word).length}.max
 
     write_sugg = lambda do
       # Find first word that case-insensitive matches what they've typed
@@ -85,9 +92,26 @@ module FancyGets
       chosen ||= []
       chosen = [words[0]] if chosen == [] && !is_multiple
       position = words.index(chosen.first) if chosen.length > 0
-      words.each { |word| puts chosen.include?(word) ? "#{prefix}#{word}#{postfix}" : "#{" " * uncolor.call(prefix).length}#{word}" }
+      # If there's more options than we can fit at once
+      unless offset.nil?
+        # ... put the chosen one a third of the way down the screen
+        offset = position - (height / 3)
+        offset = 0 if offset < 0
+      end
+      # Scrolled any amount downwards?
+      puts "#{" " * uncolor.call(prefix).length}A" if (offset || 0) > 0
+      top_bottom_reserved = ((offset || 0) > 1 ? 2 : 1)
+      last_word = (offset || 0) + height - top_bottom_reserved
+      # Maybe we can fit it all
+      last_word = words.length if last_word > words.length
+      # Write all the visible words
+      words[(offset || 0)...last_word].each { |word| puts chosen.include?(word) ? "#{prefix}#{word}#{postfix}" : "#{" " * uncolor.call(prefix).length}#{word}" }
+      # Can't fit it all?
+      puts "#{" " * uncolor.call(prefix).length}V" if last_word < words.length
+
       info ||= "Use arrow keys#{is_multiple ? ", spacebar to toggle, and ENTER to save" : " and ENTER to make a choice"}"
-      print info + (27.chr + 91.chr + 65.chr) * (words.length - position)
+      # %%% used to be (words.length - position)
+      print info + (27.chr + 91.chr + 65.chr) * (height - (position - offset) - (last_word < words.length ? 1 : 0))
       # To end of text on starting line
       info_length = uncolor.call(info).length
       word_length = uncolor.call(words[position]).length + pre_post_length
@@ -149,6 +173,16 @@ module FancyGets
             end
           when 66 # - down
             if is_list && position < words.length - 1
+              # Now moving down past the bottom of the shown window?
+              if position >= offset + (height - 3)
+                print "\b" * (uncolor.call(words[position]).length + pre_post_length)
+                print (27.chr + 91.chr + 65.chr) * (height - (offset > 0 ? 3 : 3))
+                offset += 1
+                # Add 1 if offset + height == (words.length - 1)
+                words[offset...(offset + height - 4)].each do |word|
+                  puts (is_multiple && chosen.include?(word)) ? "#{prefix}#{word}#{postfix}" : "#{" " * uncolor.call(prefix).length}#{word}#{" " * (word_blanking_spaces - word.length)}"
+                end
+              end
               make_select.call(false, true, true) unless is_multiple
               w1 = uncolor.call(words[position]).length
               position += 1
@@ -162,6 +196,16 @@ module FancyGets
             end
           when 65 # - up
             if is_list && position > 0
+              # Now moving up past the top of the shown window?
+              if position <= offset
+                print "\b" * (uncolor.call(words[position]).length + pre_post_length)
+                offset -= 1
+                # print (27.chr + 91.chr + 65.chr) if offset == 0
+                words[offset...(offset + height - 2)].each do |word|
+                  puts (is_multiple && chosen.include?(word)) ? "#{prefix}#{word}#{postfix}" : "#{" " * uncolor.call(prefix).length}#{word}#{" " * (word_blanking_spaces - word.length)}"
+                end
+                print (27.chr + 91.chr + 65.chr) * (height - (offset > 0 ? 3 : 3))
+              end
               make_select.call(false, true, true) unless is_multiple
               w1 = uncolor.call(words[position]).length
               position -= 1
