@@ -11,31 +11,49 @@ module FancyGets
   end
 
   # Show a list of stuff, potentially some highlighted, and allow people to up-down arrow around and pick stuff
-  def gets_list(words, is_multiple = false, chosen = [], prefix = "> ", postfix = " <", info = nil)
-    # Trying to supply parameters but left out a "true" for is_multiple?
-    if is_multiple.is_a?(Array)
-      chosen = is_multiple
-      is_multiple = true
+  def gets_list(words, is_multiple = false, chosen = nil, prefix = "> ", postfix = " <", info = nil, height = nil)
+    if words.is_a? Hash
+      is_multiple = words[:is_multiple] || false
+      chosen = words[:chosen]
+      prefix = words[:prefix] || "> "
+      postfix = words[:postfix] || " <"
+      info = words[:info]
+      height = words[:height] || nil
+      words = words[:words]
+    else
+      # Trying to supply parameters but left out a "true" for is_multiple?
+      if is_multiple.is_a?(Enumerable) || is_multiple.is_a?(String) || is_multiple.is_a?(Fixnum)
+        chosen = is_multiple
+        is_multiple = false
+      end
     end
-    if is_multiple.is_a?(String) || is_multiple.is_a?(Fixnum)
-      chosen = is_multiple
-      is_multiple = false
-    end
-    is_multiple = true if chosen.is_a?(Array) && chosen.length > 1
-    height = words.length
-    winheight = IO.console.winsize.first - 3
-    height = winheight if height > winheight
+    # Slightly inclined to ditch this in case the things they're choosing really are Enumerable
+    is_multiple = true if chosen.is_a?(Enumerable)
     FancyGets.gets_internal_core(true, is_multiple, words, chosen, prefix, postfix, info, height)
   end
 
   # The internal routine that makes all the magic happen
-  def self.gets_internal_core(is_list, is_password, words = nil, chosen = [], prefix = "> ", postfix = " <", info = nil, height = nil)
+  def self.gets_internal_core(is_list, is_password, word_objects = nil, chosen = nil, prefix = "> ", postfix = " <", info = nil, height = nil)
     # OK -- second parameter, is_password, means is_multiple when is_list is true
     is_multiple = is_list & is_password
-    words.sort! unless words.nil? || is_list
-    string = chosen if chosen.is_a?(String)
+    unless word_objects.nil? || is_list
+      word_objects.sort! {|wo1, wo2| wo1.to_s <=> wo2.to_s}
+    end
+    words = word_objects.map(&:to_s)
+    if is_multiple
+      chosen ||= [0] unless is_multiple
+    else
+      if chosen.is_a?(Enumerable)
+        # Maybe find first string or object that matches the stuff they have sequenced in the chosen array
+        string = chosen.first.to_s
+      else
+        string = chosen.to_s
+      end
+    end
     position = 0
-    height ||= words.length
+    height = words.length unless !height.nil? && height.is_a?(Numeric) && height > 2
+    winheight = IO.console.winsize.first - 3
+    height = winheight if height > winheight
     offset = (height < words.length) ? 0 : nil
     sugg = ""
     prev_sugg = ""
@@ -79,21 +97,77 @@ module FancyGets
       print "\b" * (uncolor.call(word).length + pre_post_length) if is_end_at_front
     end
 
+    arrow_down = lambda do
+      if position < words.length - 1
+        is_shift = false
+        # Now moving down past the bottom of the shown window?
+        if !offset.nil? && position >= offset + (height - 3)
+          print "\b" * (uncolor.call(words[position]).length + pre_post_length)
+          print (27.chr + 91.chr + 65.chr) * (height - (offset > 0 ? 3 : 3))
+          offset += 1
+          # Add 1 if offset + height == (words.length - 1)
+          (offset...(offset + height - 4)).each do |i|
+            end_fill = max_word_length - uncolor.call(words[i]).length
+            puts (is_multiple && chosen.include?(i)) ? "#{prefix}#{words[i]}#{postfix}#{" " * end_fill}" : "#{" " * uncolor.call(prefix).length}#{words[i]}#{" " * (end_fill + uncolor.call(postfix).length)}"
+          end
+          is_shift = true
+        end
+        make_select.call(chosen.include?(position) && is_shift && is_multiple, true, true) if is_shift || !is_multiple
+        w1 = uncolor.call(words[position]).length
+        position += 1
+        print 27.chr + 91.chr + 66.chr
+        if is_shift || !is_multiple
+          make_select.call((chosen.include?(position) && is_shift) || !is_multiple)
+        else
+          w2 = uncolor.call(words[position]).length
+          print (w1 > w2 ? "\b" : (27.chr + 91.chr + 67.chr)) * (w1 - w2).abs
+        end
+      end
+    end
+
+    arrow_up = lambda do
+      if position > 0
+        is_shift = false
+        # Now moving up past the top of the shown window?
+        if position <= (offset || 0)
+          print "\b" * (uncolor.call(words[position]).length + pre_post_length)
+          offset -= 1
+          # print (27.chr + 91.chr + 65.chr) if offset == 0
+          (offset...(offset + height - 2)).each do |i|
+            end_fill = max_word_length - uncolor.call(words[i]).length
+            puts (is_multiple && chosen.include?(i)) ? "#{prefix}#{words[i]}#{postfix}#{" " * end_fill}" : "#{" " * uncolor.call(prefix).length}#{words[i]}#{" " * (end_fill + uncolor.call(postfix).length)}"
+          end
+          print (27.chr + 91.chr + 65.chr) * (height - (offset > 0 ? 3 : 3))
+          is_shift = true
+        end
+        make_select.call(chosen.include?(position) && is_shift && is_multiple, true, true) if is_shift || !is_multiple
+        w1 = uncolor.call(words[position]).length
+        position -= 1
+        print 27.chr + 91.chr + 65.chr
+        if is_shift || !is_multiple
+          make_select.call((chosen.include?(position) && is_shift) || !is_multiple)
+        else
+          w2 = uncolor.call(words[position]).length
+          print (w1 > w2 ? "\b" : (27.chr + 91.chr + 67.chr)) * (w1 - w2).abs
+        end
+      end
+    end
+
     if is_list
       # Maybe confirm the height is adequate by checking out IO.console.winsize
       case chosen.class.name
       when "Fixnum"
-        chosen = [words[chosen]]
+        chosen = [chosen]
       when "String"
         if words.include?(chosen)
-          chosen = [chosen]
+          chosen = [words.index(chosen)]
         else
           chosen = []
         end
       end
       chosen ||= []
-      chosen = [words[0]] if chosen == [] && !is_multiple
-      position = words.index(chosen.first) if chosen.length > 0
+      chosen = [0] if chosen == [] && !is_multiple
+      position = chosen.first if chosen.length > 0
       # If there's more options than we can fit at once
       unless offset.nil?
         # ... put the chosen one a third of the way down the screen
@@ -109,7 +183,7 @@ module FancyGets
       # Maybe we can fit it all
       last_word = words.length if last_word > words.length
       # Write all the visible words
-      words[(offset || 0)...last_word].each { |word| puts chosen.include?(word) ? "#{prefix}#{word}#{postfix}" : "#{" " * uncolor.call(prefix).length}#{word}" }
+      ((offset || 0)...last_word).each { |i| puts chosen.include?(i) ? "#{prefix}#{words[i]}#{postfix}" : "#{" " * uncolor.call(prefix).length}#{words[i]}" }
       # Can't fit it all?
       #   was: if last_word < (words.length - top_bottom_reserved)
       puts "#{" " * uncolor.call(prefix).length}#{"↓" * max_word_length}" if height < words.length
@@ -167,66 +241,22 @@ module FancyGets
         when 91 # Arrow keys
           case ch = STDIN.getch.ord
           when 68 # Arrow left
-            if position > 0
+            if !is_list && position > 0
               print "\b" # 27.chr + 91.chr + 68.chr
               position -= 1
             end
           when 67 # Arrow right
-            if position < string.length
+            if !is_list && position < string.length
               print 27.chr + 91.chr + 67.chr
               position += 1
             end
           when 66 # - down
-            if is_list && position < words.length - 1
-              is_shift = false
-              # Now moving down past the bottom of the shown window?
-              if !offset.nil? && position >= offset + (height - 3)
-                print "\b" * (uncolor.call(words[position]).length + pre_post_length)
-                print (27.chr + 91.chr + 65.chr) * (height - (offset > 0 ? 3 : 3))
-                offset += 1
-                # Add 1 if offset + height == (words.length - 1)
-                words[offset...(offset + height - 4)].each do |word|
-                  end_fill = max_word_length - uncolor.call(word).length
-                  puts (is_multiple && chosen.include?(word)) ? "#{prefix}#{word}#{postfix}#{" " * end_fill}" : "#{" " * uncolor.call(prefix).length}#{word}#{" " * (end_fill + uncolor.call(postfix).length)}"
-                end
-                is_shift = true
-              end
-              make_select.call(chosen.include?(words[position]) && is_shift && is_multiple, true, true) if is_shift || !is_multiple
-              w1 = uncolor.call(words[position]).length
-              position += 1
-              print 27.chr + 91.chr + 66.chr
-              if is_shift || !is_multiple
-                make_select.call((chosen.include?(words[position]) && is_shift) || !is_multiple)
-              else
-                w2 = uncolor.call(words[position]).length
-                print (w1 > w2 ? "\b" : (27.chr + 91.chr + 67.chr)) * (w1 - w2).abs
-              end
+            if is_list
+              arrow_down.call
             end
           when 65 # - up
-            if is_list && position > 0
-              is_shift = false
-              # Now moving up past the top of the shown window?
-              if position <= (offset || 0)
-                print "\b" * (uncolor.call(words[position]).length + pre_post_length)
-                offset -= 1
-                # print (27.chr + 91.chr + 65.chr) if offset == 0
-                words[offset...(offset + height - 2)].each do |word|
-                  end_fill = max_word_length - uncolor.call(word).length
-                  puts (is_multiple && chosen.include?(word)) ? "#{prefix}#{word}#{postfix}#{" " * end_fill}" : "#{" " * uncolor.call(prefix).length}#{word}#{" " * (end_fill + uncolor.call(postfix).length)}"
-                end
-                print (27.chr + 91.chr + 65.chr) * (height - (offset > 0 ? 3 : 3))
-                is_shift = true
-              end
-              make_select.call(chosen.include?(words[position]) && is_shift && is_multiple, true, true) if is_shift || !is_multiple
-              w1 = uncolor.call(words[position]).length
-              position -= 1
-              print 27.chr + 91.chr + 65.chr
-              if is_shift || !is_multiple
-                make_select.call((chosen.include?(words[position]) && is_shift) || !is_multiple)
-              else
-                w2 = uncolor.call(words[position]).length
-                print (w1 > w2 ? "\b" : (27.chr + 91.chr + 67.chr)) * (w1 - w2).abs
-              end
+            if is_list
+              arrow_up.call
             end
           when 51 # - Delete forwards?
           else
@@ -260,16 +290,22 @@ module FancyGets
         end
       else # Insert character
         if is_list
-          if is_multiple && ch == " "
-            # Toggle this entry
-            word = words[position]
-            does_include = chosen.include?(word)
-            if does_include
-              chosen -= [word]
-            else
-              chosen += [word]
+          case ch
+          when " "
+            if is_multiple
+              # Toggle this entry
+              does_include = chosen.include?(position)
+              if does_include
+                chosen -= [position]
+              else
+                chosen += [position]
+              end
+              make_select.call(!does_include, true)
             end
-            make_select.call(!does_include, true)
+          when "j"  # Down
+            arrow_down.call
+          when "k"  # Up
+            arrow_up.call
           end
         else
           string = string[0...position] + ch + string[position..-1]
@@ -288,10 +324,9 @@ module FancyGets
 
     if is_list
       # Put chosen stuff in same order as it's listed in the words array
-      chosen = words.select { |word| chosen.include?(word) }
-      is_multiple ? chosen : words[position]
+      is_multiple ? chosen.map {|c| word_objects[c] } : word_objects[position]
     else
-      sugg.empty? ? string : sugg
+      sugg.empty? ? string : word_objects[words.index(sugg)]
     end
   end
 end
