@@ -12,6 +12,8 @@ module FancyGets
 
   # Show a list of stuff, potentially some highlighted, and allow people to up-down arrow around and pick stuff
   def gets_list(words, is_multiple = false, chosen = nil, prefix = "> ", postfix = " <", info = nil, height = nil)
+    on_change = nil
+    on_select = nil
     if words.is_a? Hash
       is_multiple = words[:is_multiple] || false
       chosen = words[:chosen]
@@ -19,7 +21,9 @@ module FancyGets
       postfix = words[:postfix] || " <"
       info = words[:info]
       height = words[:height] || nil
-      words = words[:words]
+      on_change = words[:on_change]
+      on_select = words[:on_select]
+      words = words[:list]
     else
       # Trying to supply parameters but left out a "true" for is_multiple?
       if is_multiple.is_a?(Enumerable) || is_multiple.is_a?(String) || is_multiple.is_a?(Fixnum)
@@ -29,11 +33,11 @@ module FancyGets
     end
     # Slightly inclined to ditch this in case the things they're choosing really are Enumerable
     is_multiple = true if chosen.is_a?(Enumerable)
-    FancyGets.gets_internal_core(true, is_multiple, words, chosen, prefix, postfix, info, height)
+    FancyGets.gets_internal_core(true, is_multiple, words, chosen, prefix, postfix, info, height, on_change, on_select)
   end
 
   # The internal routine that makes all the magic happen
-  def self.gets_internal_core(is_list, is_password, word_objects = nil, chosen = nil, prefix = "> ", postfix = " <", info = nil, height = nil)
+  def self.gets_internal_core(is_list, is_password, word_objects = nil, chosen = nil, prefix = "> ", postfix = " <", info = nil, height = nil, on_change = nil, on_select = nil)
     # OK -- second parameter, is_password, means is_multiple when is_list is true
     is_multiple = is_list & is_password
     unless word_objects.nil? || is_list
@@ -80,7 +84,7 @@ module FancyGets
     # Used for dropdown select / deselect
     clear_dropdown_info = lambda do
       print "\b" * (uncolor.call(words[position]).length + pre_post_length)
-      print (27.chr + 91.chr + 66.chr) * (words.length - position)
+      print (27.chr + 91.chr + 66.chr) * (height - (position - (offset || 0)) - (height < words.length ? 1 : 0))
       info_length = uncolor.call(info).length
       print " " * info_length + "\b" * info_length
     end
@@ -97,8 +101,50 @@ module FancyGets
       print "\b" * (uncolor.call(word).length + pre_post_length) if is_end_at_front
     end
 
+    write_info = lambda do |new_info|
+      # Put the response into the info line, as long as it's short enough!
+      new_info.gsub!("\n", " ")
+      new_info_length = uncolor.call(new_info).length
+      console_width = IO.console.winsize.last
+      # Might have to trim if it's a little too wide
+      new_info = new_info[0...console_width] if console_width < new_info_length
+      # Arrow down to the info line
+      print (27.chr + 91.chr + 66.chr) * (height - (position - (offset || 0)) - (height < words.length ? 1 : 0))
+      # To start of info line
+      word_length = uncolor.call(words[position]).length + pre_post_length
+      print "\b" * word_length
+      # Write out the new response
+      prev_info_length = uncolor.call(info).length
+      difference = prev_info_length - new_info_length
+      difference = 0 if difference < 0
+      print new_info + " " * difference
+      info = new_info
+      # Go up to where we originated
+      print (27.chr + 91.chr + 65.chr) * (height - (position - (offset || 0)) - (height < words.length ? 1 : 0))
+      # Arrow left or right to get to the right spot again
+      new_info_length += difference
+      print (new_info_length > word_length ? "\b" : (27.chr + 91.chr + 67.chr)) * (new_info_length - word_length).abs
+    end
+
+    handle_on_select = lambda do |focused|
+      if on_select.is_a? Proc
+        response = on_select.call({chosen: chosen, focused: focused})
+        new_info = nil
+        if response.is_a? Hash
+          chosen = response[:chosen] || chosen
+          new_info = response[:info]
+        elsif response.is_a? String
+          new_info = response
+        end
+        unless new_info.nil?
+          write_info.call(new_info)
+        end
+      end
+    end
+
     arrow_down = lambda do
       if position < words.length - 1
+        handle_on_select.call(word_objects[position + 1])
         is_shift = false
         # Now moving down past the bottom of the shown window?
         if !offset.nil? && position >= offset + (height - 3)
@@ -127,6 +173,7 @@ module FancyGets
 
     arrow_up = lambda do
       if position > 0
+        handle_on_select.call(word_objects[position - 1])
         is_shift = false
         # Now moving up past the top of the shown window?
         if position <= (offset || 0)
@@ -161,6 +208,24 @@ module FancyGets
       when "String"
         if words.include?(chosen)
           chosen = [words.index(chosen)]
+        else
+          chosen = []
+        end
+      when "Array"
+        chosen.each_with_index do |item, i|
+          case item.class.name
+          when "String"
+            chosen[i] = words.index(item)
+          when "Fixnum"
+            chosen[i] = nil if item < 0 || item >= words.length
+          else
+            chosen[i] = word_objects.index(item)
+          end
+        end
+        chosen.select{|item| !item.nil?}.uniq
+      else
+        if word_objects.include?(chosen)
+          chosen = [word_objects.index(chosen)]
         else
           chosen = []
         end
@@ -295,12 +360,29 @@ module FancyGets
             if is_multiple
               # Toggle this entry
               does_include = chosen.include?(position)
-              if does_include
-                chosen -= [position]
-              else
-                chosen += [position]
+              is_rejected = false
+              if on_change.is_a? Proc
+                response = on_change.call({chosen: chosen, changed: word_objects[position], is_chosen: !does_include})
+                new_info = nil
+                if response.is_a? Hash
+                  is_rejected = response[:is_rejected]
+                  chosen = response[:chosen] || chosen
+                  new_info = response[:info]
+                elsif response.is_a? String
+                  new_info = response
+                end
+                unless new_info.nil?
+                  write_info.call(new_info)
+                end
               end
-              make_select.call(!does_include, true)
+              unless is_rejected
+                if does_include
+                  chosen -= [position]
+                else
+                  chosen += [position]
+                end
+                make_select.call(!does_include, true)
+              end
             end
           when "j"  # Down
             arrow_down.call
