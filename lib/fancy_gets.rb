@@ -43,7 +43,7 @@ module FancyGets
     unless word_objects.nil? || is_list
       word_objects.sort! {|wo1, wo2| wo1.to_s <=> wo2.to_s}
     end
-    words = word_objects.map(&:to_s)
+    words = word_objects.nil? ? [] : word_objects.map(&:to_s)
     if is_multiple
       chosen ||= [0] unless is_multiple
     else
@@ -371,7 +371,7 @@ module FancyGets
       when 127 # Backspace
         if !is_list && position > 0
           string = string[0...position - 1] + string[position..-1]
-          if words.nil?
+          if words.empty?
             position -= 1
             print "\b#{is_password ? "*" * (string.length - position) : string[position..-1]} #{"\b" * (string.length - position + 1)}"
           else
@@ -383,7 +383,7 @@ module FancyGets
       when 126 # Delete (forwards)
         if !is_list && position < string.length
           string = string[0...position] + string[position + 1..-1]
-          if words.nil?
+          if words.empty?
             print "#{is_password ? "*" * (string.length - position) : string[position..-1]} #{"\b" * (string.length - position + 1)}"
           else
             prev_sugg = sugg
@@ -443,7 +443,7 @@ module FancyGets
           end
         else
           string = string[0...position] + ch + string[position..-1]
-          if words.nil?
+          if words.empty?
             ch = "*" if is_password
             position += 1
             print "#{ch}#{is_password ? "*" * (string.length - position) : string[position..-1]}#{"\b" * (string.length - position)}"
