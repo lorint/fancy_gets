@@ -1,4 +1,4 @@
-require "fancy_gets/version"
+require_relative "fancy_gets/version"
 require 'io/console'
 
 module FancyGets
@@ -26,7 +26,7 @@ module FancyGets
       words = words[:list]
     else
       # Trying to supply parameters but left out a "true" for is_multiple?
-      if is_multiple.is_a?(Enumerable) || is_multiple.is_a?(String) || is_multiple.is_a?(Fixnum)
+      if is_multiple.is_a?(Enumerable) || is_multiple.is_a?(String) || is_multiple.is_a?(Numeric)
         chosen = is_multiple
         is_multiple = false
       end
@@ -237,21 +237,21 @@ module FancyGets
     # Initialize everything
     if is_list
       # Maybe confirm the height is adequate by checking out IO.console.winsize
-      case chosen.class.name
-      when "Fixnum"
+      case
+      when chosen.is_a?(Numeric)
         chosen = [chosen]
-      when "String"
+      when chosen.is_a?(String)
         if words.include?(chosen)
           chosen = [words.index(chosen)]
         else
           chosen = []
         end
-      when "Array"
+      when chosen.is_a?(Array)
         chosen.each_with_index do |item, i|
-          case item.class.name
-          when "String"
+          case
+          when item.is_a?(String)
             chosen[i] = words.index(item)
-          when "Fixnum"
+          when item.is_a?(Numeric)
             chosen[i] = nil if item < 0 || item >= words.length
           else
             chosen[i] = word_objects.index(item)
