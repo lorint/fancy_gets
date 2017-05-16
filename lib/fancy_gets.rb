@@ -55,7 +55,7 @@ module FancyGets
       end
     end
     position = 0
-    # After tweaking the down arrow code, might work OK with 3 things
+    # Up and down arrows break with height of 3 or less
     height = words.length unless !height.nil? && height.is_a?(Numeric) && height >= 4
     winheight = IO.console.winsize.first - 3
     height = words.length if height > words.length
@@ -150,7 +150,6 @@ module FancyGets
     # **********************************************
     # ******************** DOWN ********************
     # Doesn't work with a height of 3 when there's more than 3 in the list
-    # (somehow up arrow can work OK with this)
     arrow_down = lambda do
       if position < words.length - 1
         is_shift = false
@@ -162,7 +161,7 @@ module FancyGets
           print (27.chr + 91.chr + 65.chr) * (height - 3)
           if offset == 0
             print (27.chr + 91.chr + 65.chr)
-            puts "#{" " * pre_length}#{"↑" * max_word_length}"
+            puts "#{" " * pre_length}#{"↑" * max_word_length}#{" " * post_length}"
           end
           offset += 1
           ((offset + 1)..(offset + (height - 4))).each do |i|
@@ -212,7 +211,7 @@ module FancyGets
             puts ((!is_multiple && i == (offset + 1)) || (is_multiple && chosen.include?(i))) ? "#{prefix}#{words[i]}#{postfix}#{" " * end_fill}" : "#{" " * pre_length}#{words[i]}#{" " * (end_fill + post_length)}"
           end
           if offset == words.length - height - 1
-            puts "#{" " * pre_length}#{"↓" * max_word_length}"
+            puts "#{" " * pre_length}#{"↓" * max_word_length}#{" " * post_length}"
             print (27.chr + 91.chr + 65.chr)
           end
           print (27.chr + 91.chr + 65.chr) * (height - 2)
@@ -273,6 +272,7 @@ module FancyGets
         # ... put the chosen one a third of the way down the screen
         offset = position - (height / 3)
         offset = words.length - height if offset > words.length - height
+        offset = 0 if offset < 0
       end
 
       # **********************************************
@@ -353,13 +353,9 @@ module FancyGets
               position += 1
             end
           when 66 # - down
-            if is_list
-              arrow_down.call
-            end
+            arrow_down.call if is_list
           when 65 # - up
-            if is_list
-              arrow_up.call
-            end
+            arrow_up.call if is_list
           when 51 # - Delete forwards?
           else
             # puts "ESC 91 #{ch}"

@@ -75,6 +75,26 @@ picked_toys = gets_list(toys, true, ["Kite", "Water Gun"])
 puts "\nYou've picked #{picked_toys.join(", ")}."
 ```
 
+You can also pass in parameters as a hash, which brings even more possibility because you can pass in callbacks!  Here's how to dynamically update the info line at the bottom to indicate how many things have been chosen so far:
+
+```ruby
+picked_toys = gets_list(
+  list: toys,
+  is_multiple: true,
+  chosen: [],
+  prefix: "\033[1;32m>\033[1;35m> \033[0m",
+  postfix: "\033[1;35m <\033[1;32m<\033[0m",
+  height: 4,
+  on_change: proc{ |data|
+    "You have chosen #{data[:chosen].count} items"
+  }
+)
+puts "\nAren't callbacks cool?"
+```
+
+You can also set a callback for on_select, which responds when people are arrowing around through the list.  With the blocks in both on_change and on_select if a string is returned, it will update what is shown in the info line at the bottom.
+
+
 ## gets_auto_suggest
 
 Still using the same cool array of things, let's have the user see auto-suggest text
