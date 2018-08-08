@@ -340,7 +340,7 @@ module FancyGets
             # puts "F12"
           when 92 #F13
           end
-        when 91 # Arrow keys
+        when 91 # Arrow keys and delete forwards
           case ch = STDIN.getch.ord
           when 68 # Arrow left
             if !is_list && position > 0
@@ -356,7 +356,18 @@ module FancyGets
             arrow_down.call if is_list
           when 65 # - up
             arrow_up.call if is_list
-          when 51 # - Delete forwards?
+          when 51
+            if STDIN.getch.ord == 126  # - Delete (forwards)
+              if !is_list && position < string.length
+                string = string[0...position] + string[position + 1..-1]
+                if words.empty?
+                  print "#{is_password ? "*" * (string.length - position) : string[position..-1]} #{"\b" * (string.length - position + 1)}"
+                else
+                  prev_sugg = sugg
+                  print "#{string[position..-1]}#{write_sugg.call}"
+                end
+              end
+            end
           else
             # puts "ESC 91 #{ch}"
           end
@@ -374,16 +385,6 @@ module FancyGets
             prev_sugg = sugg
             position -= 1
             print "\b#{string[position..-1]}#{write_sugg.call}"
-          end
-        end
-      when 126 # Delete (forwards)
-        if !is_list && position < string.length
-          string = string[0...position] + string[position + 1..-1]
-          if words.empty?
-            print "#{is_password ? "*" * (string.length - position) : string[position..-1]} #{"\b" * (string.length - position + 1)}"
-          else
-            prev_sugg = sugg
-            print "#{string[position..-1]}#{write_sugg.call}"
           end
         end
       else # Insert character

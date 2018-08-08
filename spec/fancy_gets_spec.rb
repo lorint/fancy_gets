@@ -80,6 +80,7 @@ describe FancyGets do
         expect(term[:x]).to eq(0)
         expect(term[:y]).to eq(6)
       end
+
       it 'should accommodate shorter windows by having arrows to show continuation' do
         expect(STDIN).to receive(:getch).and_return(
           13.chr)                 # Enter
@@ -141,11 +142,11 @@ describe FancyGets do
   describe "When using gets_password, it:" do
     it 'should mask the typed characters with asterisks' do
       expect(STDIN).to receive(:getch).and_return(
-        "C", "o", "o", "l", "B", "e", "a", "n", "s", 13.chr)
+        "C", "o", "o", "l", "B", "e", "a", "n", "s", "~", 13.chr)
       term = fake_terminal(80, 10) do
-        expect(gets_password()).to eq("CoolBeans")
+        expect(gets_password()).to eq("CoolBeans~")
       end
-      expect(term[:lines][0][0..10]).to eq("*********  ")
+      expect(term[:lines][0][0..11]).to eq("**********  ")
     end
 
     it 'should allow arrow keys to edit the text' do
@@ -168,16 +169,16 @@ describe FancyGets do
         "P",
         "a",
         "X",
-        127.chr,                # Backspace
+        127.chr,                         # Backspace
         "s",
         "s",
-        27.chr, 91.chr, 68.chr, # Left arrow
-        27.chr, 91.chr, 68.chr, # Left arrow
-        27.chr, 91.chr, 68.chr, # Left arrow
-        27.chr, 91.chr, 68.chr, # Left arrow
-        27.chr, 91.chr, 68.chr, # Left arrow
-        126.chr,                # Delete
-        13.chr)                 # Enter
+        27.chr, 91.chr, 68.chr,          # Left arrow
+        27.chr, 91.chr, 68.chr,          # Left arrow
+        27.chr, 91.chr, 68.chr,          # Left arrow
+        27.chr, 91.chr, 68.chr,          # Left arrow
+        27.chr, 91.chr, 68.chr,          # Left arrow
+        27.chr, 91.chr, 51.chr, 126.chr, # Delete
+        13.chr)                          # Enter
       term = fake_terminal(80, 10) do
         expect(gets_password()).to eq("Pass")
       end
@@ -233,16 +234,16 @@ describe FancyGets do
         "B",
         "e",
         "X",
-        127.chr,                # Backspace
+        127.chr,                         # Backspace
         "a",
         "c",
-        27.chr, 91.chr, 68.chr, # Left arrow
-        27.chr, 91.chr, 68.chr, # Left arrow
-        27.chr, 91.chr, 68.chr, # Left arrow
-        27.chr, 91.chr, 68.chr, # Left arrow
-        27.chr, 91.chr, 68.chr, # Left arrow
-        126.chr,                # Delete
-        13.chr)                 # Enter
+        27.chr, 91.chr, 68.chr,          # Left arrow
+        27.chr, 91.chr, 68.chr,          # Left arrow
+        27.chr, 91.chr, 68.chr,          # Left arrow
+        27.chr, 91.chr, 68.chr,          # Left arrow
+        27.chr, 91.chr, 68.chr,          # Left arrow
+        27.chr, 91.chr, 51.chr, 126.chr, # Delete
+        13.chr)                          # Enter
       term = fake_terminal(80, 10) do
         expect(gets_auto_suggest(@list)).to eq("Beach Ball")
       end
