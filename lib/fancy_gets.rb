@@ -40,10 +40,10 @@ module FancyGets
   def self.gets_internal_core(is_list, is_password, word_objects = nil, chosen = nil, prefix = "> ", postfix = " <", info = nil, height = nil, on_change = nil, on_select = nil)
     # OK -- second parameter, is_password, means is_multiple when is_list is true
     is_multiple = is_list & is_password
-    unless word_objects.nil? || is_list
+    if word_objects && !is_list
       word_objects.sort! {|wo1, wo2| wo1.to_s <=> wo2.to_s}
     end
-    words = word_objects.nil? ? [] : word_objects.map(&:to_s)
+    words = word_objects&.map(&:to_s) || []
     if is_multiple
       chosen ||= [0] unless is_multiple
     else
@@ -56,8 +56,8 @@ module FancyGets
     end
     position = 0
     # Up and down arrows break with height of 3 or less
-    height = words.length unless !height.nil? && height.is_a?(Numeric) && height >= 4
-    winheight = IO.console.winsize.first - 3
+    height = words.length unless height&.is_a?(Numeric) && height >= 4
+    winheight = (IO.console || STDOUT).winsize.first - 3
     height = words.length if height > words.length
     height = winheight if height > winheight
     offset = 0
@@ -109,7 +109,7 @@ module FancyGets
       # Put the response into the info line, as long as it's short enough!
       new_info.gsub!("\n", " ")
       new_info_length = uncolor.call(new_info).length
-      console_width = IO.console.winsize.last
+      console_width = (IO.console || STDOUT).winsize.last
       # Might have to trim if it's a little too wide
       new_info = new_info[0...console_width] if console_width < new_info_length
       # Arrow down to the info line
@@ -131,9 +131,9 @@ module FancyGets
       print (new_info_length > word_length ? "\b" : (27.chr + 91.chr + 67.chr)) * (new_info_length - word_length).abs
     end
 
-    handle_on_select = lambda do |focused|
+    handle_on_select = lambda do |selected|
       if on_select.is_a? Proc
-        response = on_select.call({chosen: chosen, focused: focused})
+        response = on_select.call({chosen: chosen, selected: selected})
         new_info = nil
         if response.is_a? Hash
           chosen = response[:chosen] || chosen
@@ -141,9 +141,7 @@ module FancyGets
         elsif response.is_a? String
           new_info = response
         end
-        unless new_info.nil?
-          write_info.call(new_info)
-        end
+        write_info.call(new_info) if new_info
       end
     end
 
@@ -256,7 +254,7 @@ module FancyGets
             chosen[i] = word_objects.index(item)
           end
         end
-        chosen.select{|item| !item.nil?}.uniq
+        chosen.compact.uniq
       else
         if word_objects.include?(chosen)
           chosen = [word_objects.index(chosen)]
@@ -356,8 +354,8 @@ module FancyGets
             arrow_down.call if is_list
           when 65 # - up
             arrow_up.call if is_list
-          when 51
-            if STDIN.getch.ord == 126  # - Delete (forwards)
+          when 51 # - Start of a possible delete forwards?
+            if STDIN.getch.ord == 126 # - Delete (forwards)
               if !is_list && position < string.length
                 string = string[0...position] + string[position + 1..-1]
                 if words.empty?
@@ -408,7 +406,7 @@ module FancyGets
                 if response.is_a? Hash
                   is_rejected = response[:is_rejected]
                   # If they told us exactly what the choices should now be, make that happen
-                  if !response.nil? && response[:chosen].is_a?(Enumerable)
+                  if response && response[:chosen].is_a?(Enumerable)
                     chosen = response[:chosen].map {|choice| word_objects.index(choice)}
                     is_rejected = true
                   end
@@ -416,9 +414,7 @@ module FancyGets
                 elsif response.is_a? String
                   new_info = response
                 end
-                unless new_info.nil?
-                  write_info.call(new_info)
-                end
+                write_info.call(new_info) if new_info
               end
               unless is_rejected
                 if does_include
